@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/task", handler.Task)
-	http.HandleFunc("/task/", handler.Task)
+	http.HandleFunc("/tasks", handler.Tasks)
+	http.HandleFunc("/tasks/", handler.Tasks)
 
 	http.ListenAndServe("localhost:8080", nil)
 }

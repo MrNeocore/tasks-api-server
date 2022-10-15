@@ -13,12 +13,18 @@ import (
 	"github.com/google/uuid"
 )
 
-func Task(w http.ResponseWriter, req *http.Request) {
+func Tasks(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPost:
-		AddTask(w, req)
+		CreateTask(w, req)
 	case http.MethodGet:
-		GetTask(w, req)
+		pathParts := strings.Split(req.URL.Path, "/")
+		if len(pathParts) != 3 {
+			GetTasks(w, req)
+		} else {
+			_taskId := pathParts[2]
+			GetTask(_taskId, w, req)
+		}
 	default:
 		errorMessage := "Unsupported verb for route."
 		fmt.Println(errorMessage)
@@ -26,7 +32,7 @@ func Task(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func AddTask(w http.ResponseWriter, req *http.Request) {
+func CreateTask(w http.ResponseWriter, req *http.Request) {
 	task, taskCreationError := newTaskFromRequest(req)
 
 	if taskCreationError != nil {
@@ -61,12 +67,60 @@ func newTaskFromRequest(req *http.Request) (*t.Task, error) {
 		return nil, decodeErr
 	}
 
-	return &task, nil
+
+func GetTasks(w http.ResponseWriter, req *http.Request) {
+	tasks, getTasksError := _getTasks(req.Context())
+
+	if getTasksError != nil {
+		fmt.Println(getTasksError.Error())
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(tasks) == 0 {
+		noTasksMessage := "No task exist yet."
+		fmt.Println(noTasksMessage)
+		http.Error(w, noTasksMessage, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	marshalError := json.NewEncoder(w).Encode(tasks)
+
+	if marshalError != nil {
+		fmt.Println(marshalError.Error())
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
-func GetTask(w http.ResponseWriter, req *http.Request) {
-	_taskId := strings.Split(req.URL.Path, "/")[2]
+func _getTasks(ctx context.Context) ([]t.Task, error) {
+	rows, queryErr := storage.DB.QueryContext(ctx, "SELECT ID, title FROM tasks")
 
+	if queryErr != nil {
+		return nil, queryErr
+	}
+
+	defer rows.Close()
+
+	var tasks []t.Task
+
+	for rows.Next() {
+		var task t.Task
+		if err := rows.Scan(&task.ID, &task.Title); err != nil {
+			return tasks, err
+		}
+		tasks = append(tasks, task)
+}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return tasks, rowsErr
+	}
+
+	return tasks, nil
+}
+
+func GetTask(_taskId string, w http.ResponseWriter, req *http.Request) {
 	taskId, taskIdParseError := uuid.Parse(_taskId)
 	if taskIdParseError != nil {
 		taskIdParseErrorMessage := fmt.Sprintf("Failed to parse taskId: %v\n", _taskId)
@@ -101,20 +155,22 @@ func GetTask(w http.ResponseWriter, req *http.Request) {
 }
 
 func _getTask(ctx context.Context, taskId uuid.UUID) (*t.Task, error) {
-	result, queryErr := storage.DB.QueryContext(ctx, "SELECT title FROM tasks WHERE id = $1", taskId)
+	rows, queryErr := storage.DB.QueryContext(ctx, "SELECT title FROM tasks WHERE id = $1", taskId)
 
 	if queryErr != nil {
 		return nil, queryErr
 	}
 
-	task := &t.Task{ID: taskId.String()}
+	defer rows.Close()
+
+	task := &t.Task{ID: taskId}
 
 	// Task not found
-	if !result.Next() {
+	if !rows.Next() {
 		return nil, nil
 	}
 
-	scanErr := result.Scan(&task.Title)
+	scanErr := rows.Scan(&task.Title)
 	if scanErr != nil {
 		return nil, scanErr
 	}
