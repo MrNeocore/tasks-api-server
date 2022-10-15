@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"golang-rest-api-server/internal/util"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 var DB *sql.DB
@@ -18,7 +18,7 @@ func init() {
 func connectDb() *sql.DB {
 	fmt.Println("Establishing connection to database.")
 
-	_db, openErr := sql.Open("sqlite", "./tasks.db")
+	_db, openErr := sql.Open("pgx", "postgres://api:password@localhost:5555/api")
 	util.PanicError(openErr)
 
 	pingError := _db.Ping()
