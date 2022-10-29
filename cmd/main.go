@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	"golang-rest-api-server/internal/api/v1/handler"
+	"github.com/MrNeocore/tasks-api-server/internal/api/v1/handler"
 )
 
 func main() {

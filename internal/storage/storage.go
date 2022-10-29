@@ -3,7 +3,8 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"golang-rest-api-server/internal/util"
+
+	"github.com/MrNeocore/tasks-api-server/internal/util"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )

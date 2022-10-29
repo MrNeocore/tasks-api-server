@@ -1,4 +1,4 @@
-module golang-rest-api-server
+module github.com/MrNeocore/tasks-api-server
 
 go 1.18
 

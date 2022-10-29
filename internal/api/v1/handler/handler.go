@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"strings"
 
-	"golang-rest-api-server/internal/storage"
-	t "golang-rest-api-server/task"
+	"github.com/MrNeocore/tasks-api-server/internal/storage"
+	t "github.com/MrNeocore/tasks-api-server/task"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
