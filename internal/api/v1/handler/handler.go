@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"golang-rest-api-server/internal/storage"
 	t "golang-rest-api-server/task"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 func Tasks(w http.ResponseWriter, req *http.Request) {
@@ -18,18 +20,42 @@ func Tasks(w http.ResponseWriter, req *http.Request) {
 	case http.MethodPost:
 		CreateTask(w, req)
 	case http.MethodGet:
-		pathParts := strings.Split(req.URL.Path, "/")
-		if len(pathParts) != 3 {
-			GetTasks(w, req)
+		_taskId, hasValidTaskId, taskIdParsingError := extractValidTaskIdFromPath(req.URL)
+		if hasValidTaskId {
+			if taskIdParsingError != nil {
+				handleTaskIdParsingError(w, taskIdParsingError)
+				return
+			}
+			GetTask(*_taskId, w, req)
 		} else {
-			_taskId := pathParts[2]
-			GetTask(_taskId, w, req)
+			GetTasks(w, req)
 		}
 	default:
 		errorMessage := "Unsupported verb for route."
 		fmt.Println(errorMessage)
 		http.Error(w, errorMessage, http.StatusBadRequest)
 	}
+}
+
+func extractValidTaskIdFromPath(url *url.URL) (*uuid.UUID, bool, error) {
+	pathParts := strings.Split(url.Path, "/")
+	if len(pathParts) != 3 {
+		return nil, false, nil
+	} else {
+		_taskId := pathParts[2]
+		taskId, taskIdParseError := uuid.Parse(_taskId)
+		if taskIdParseError != nil {
+			return &taskId, true, taskIdParseError
+		} else {
+			return &taskId, true, nil
+		}
+	}
+}
+
+func handleTaskIdParsingError(w http.ResponseWriter, parsingError error) {
+	taskIdParseErrorMessage := fmt.Sprintf("Failed to parse taskId: %v", parsingError)
+	fmt.Println(taskIdParseErrorMessage)
+	http.Error(w, taskIdParseErrorMessage, http.StatusBadRequest)
 }
 
 func CreateTask(w http.ResponseWriter, req *http.Request) {
@@ -40,9 +66,43 @@ func CreateTask(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fmt.Printf("Adding task %v.", task)
+	fmt.Printf("Adding task %v.\n", task)
 
-	_, insertErr := storage.DB.ExecContext(req.Context(), "INSERT INTO tasks (id, title) VALUES ($1, $2);", task.ID, task.Title)
+	sqlStatement := `INSERT INTO tasks (id, 
+									   creationTime, 
+									   shortTitle, 
+									   title, 
+									   description, 
+									   tags, 
+									   category, 
+									   priority, 
+									   involvesOther, 
+									   timeEstimate, 
+									   dueDate, 
+									   hardDeadline, 
+									   reminder, 
+									   repeats)
+
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+	`
+	_, insertErr := storage.DB.ExecContext(
+		req.Context(),
+		sqlStatement,
+		task.ID,
+		task.CreationTime,
+		task.ShortTitle,
+		task.Title,
+		task.Description,
+		pq.StringArray(task.Tags),
+		task.Category,
+		task.Priority,
+		task.InvolvesOther,
+		task.TimeEstimate,
+		task.DueDate,
+		task.HardDeadline,
+		task.Reminder,
+		task.Repeats,
+	)
 
 	if insertErr != nil {
 		errorMessage := "Failed to store the task !"
@@ -58,15 +118,17 @@ func CreateTask(w http.ResponseWriter, req *http.Request) {
 }
 
 func newTaskFromRequest(req *http.Request) (*t.Task, error) {
-	taskId := uuid.New().String()
+	taskId := uuid.New()
 
-	task := t.Task{ID: taskId}
-	decodeErr := json.NewDecoder(req.Body).Decode(&task)
+	task := t.NewEmptyTask(taskId)
+	decodeErr := json.NewDecoder(req.Body).Decode(task)
 
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
 
+	return task, nil
+}
 
 func GetTasks(w http.ResponseWriter, req *http.Request) {
 	tasks, getTasksError := _getTasks(req.Context())
@@ -111,7 +173,7 @@ func _getTasks(ctx context.Context) ([]t.Task, error) {
 			return tasks, err
 		}
 		tasks = append(tasks, task)
-}
+	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return tasks, rowsErr
@@ -120,15 +182,7 @@ func _getTasks(ctx context.Context) ([]t.Task, error) {
 	return tasks, nil
 }
 
-func GetTask(_taskId string, w http.ResponseWriter, req *http.Request) {
-	taskId, taskIdParseError := uuid.Parse(_taskId)
-	if taskIdParseError != nil {
-		taskIdParseErrorMessage := fmt.Sprintf("Failed to parse taskId: %v\n", _taskId)
-		fmt.Print(taskIdParseErrorMessage)
-		http.Error(w, taskIdParseErrorMessage, http.StatusBadRequest)
-		return
-	}
-
+func GetTask(taskId uuid.UUID, w http.ResponseWriter, req *http.Request) {
 	task, getTaskError := _getTask(req.Context(), taskId)
 
 	if getTaskError != nil {
@@ -155,7 +209,27 @@ func GetTask(_taskId string, w http.ResponseWriter, req *http.Request) {
 }
 
 func _getTask(ctx context.Context, taskId uuid.UUID) (*t.Task, error) {
-	rows, queryErr := storage.DB.QueryContext(ctx, "SELECT title FROM tasks WHERE id = $1", taskId)
+	fmt.Printf("Fetching task %v\n", taskId)
+
+	selectStmt := `SELECT
+			creationTime,
+			shortTitle,
+			title,
+			description,
+			tags,
+			category,
+			priority,
+			involvesOther,
+			timeEstimate,
+			dueDate,
+			hardDeadline,
+			reminder,
+			repeats
+		FROM tasks 
+		WHERE id = $1;
+	`
+
+	rows, queryErr := storage.DB.QueryContext(ctx, selectStmt, taskId)
 
 	if queryErr != nil {
 		return nil, queryErr
@@ -170,10 +244,27 @@ func _getTask(ctx context.Context, taskId uuid.UUID) (*t.Task, error) {
 		return nil, nil
 	}
 
-	scanErr := rows.Scan(&task.Title)
+	scanErr := rows.Scan(
+		&task.CreationTime,
+		&task.ShortTitle,
+		&task.Title,
+		&task.Description,
+		pq.StringArray(task.Tags),
+		&task.Category,
+		&task.Priority,
+		&task.InvolvesOther,
+		&task.TimeEstimate,
+		&task.DueDate,
+		&task.HardDeadline,
+		&task.Reminder,
+		&task.Repeats,
+	)
+
 	if scanErr != nil {
 		return nil, scanErr
 	}
+
+	fmt.Printf("Task %v fetched.\n", taskId)
 
 	return task, nil
 }
