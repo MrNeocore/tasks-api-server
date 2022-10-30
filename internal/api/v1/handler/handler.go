@@ -249,7 +249,7 @@ func _getTask(ctx context.Context, taskId uuid.UUID) (*t.Task, error) {
 		&task.ShortTitle,
 		&task.Title,
 		&task.Description,
-		pq.StringArray(task.Tags),
+		&task.Tags,
 		&task.Category,
 		&task.Priority,
 		&task.InvolvesOther,

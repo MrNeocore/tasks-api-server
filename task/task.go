@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type Category string
@@ -13,7 +14,7 @@ type Task struct {
 	ShortTitle    string         `json:"shortTitle"`
 	Title         string         `json:"title"`
 	Description   string         `json:"description"`
-	Tags          []string       `json:"tags"`
+	Tags          pq.StringArray `json:"tags"`
 	Category      Category       `json:"category"`
 	Priority      uint8          `json:"priority"`
 	InvolvesOther bool           `json:"involvesOther"`
