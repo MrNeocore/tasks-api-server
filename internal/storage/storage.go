@@ -3,11 +3,18 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"os"
 
 	"github.com/MrNeocore/tasks-api-server/internal/util"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+var HOST = util.GetOrElse(os.LookupEnv, "DB_HOST", "localhost")
+var PORT = util.GetOrElse(os.LookupEnv, "DB_PORT", "5432")
+var USER = util.GetOrElse(os.LookupEnv, "DB_USER", "api")
+var PWD = os.Getenv("DB_PWD")
+var NAME = util.GetOrElse(os.LookupEnv, "DB_NAME", "api")
 
 var DB *sql.DB
 
@@ -19,7 +26,8 @@ func init() {
 func connectDb() *sql.DB {
 	fmt.Println("Establishing connection to database.")
 
-	_db, openErr := sql.Open("pgx", "postgres://api:password@localhost:5555/api")
+	connectionString := fmt.Sprintf("postgres://%v:%v@%v:%v/%v", USER, PWD, HOST, PORT, NAME)
+	_db, openErr := sql.Open("pgx", connectionString)
 	util.PanicError(openErr)
 
 	pingError := _db.Ping()
