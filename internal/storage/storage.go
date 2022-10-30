@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Masterminds/semver"
 	"github.com/MrNeocore/tasks-api-server/internal/util"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -18,8 +19,12 @@ var NAME = util.GetOrElse(os.LookupEnv, "DB_NAME", "api")
 
 var DB *sql.DB
 
+var minVersionStr = ">=15"
+var minVersion, _ = semver.NewConstraint(minVersionStr)
+
 func init() {
 	DB = connectDb()
+	checkVersionAtLeast(*minVersion, DB)
 	applyDbMigrations(DB)
 }
 
@@ -36,6 +41,19 @@ func connectDb() *sql.DB {
 	fmt.Println("Database connection established.")
 
 	return _db
+}
+
+func checkVersionAtLeast(minVersion semver.Constraints, db *sql.DB) {
+	var currentVersion string
+	err := db.QueryRow("SELECT split_part(version(), ' ', 2)").Scan(&currentVersion)
+	if err != nil {
+		util.PanicError(err)
+	}
+
+	if !minVersion.Check(semver.MustParse(currentVersion)) {
+		err = fmt.Errorf("postgres version is too old: %v. Requires: %v.\n", currentVersion, minVersionStr)
+		util.PanicError(err)
+	}
 }
 
 func applyDbMigrations(db *sql.DB) {
