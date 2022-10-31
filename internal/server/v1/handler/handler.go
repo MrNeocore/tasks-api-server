@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/MrNeocore/tasks-api-server/internal/api/v1/handler/create"
-	"github.com/MrNeocore/tasks-api-server/internal/api/v1/handler/get"
+	"github.com/MrNeocore/tasks-api-server/internal/server/v1/handler/create"
+	"github.com/MrNeocore/tasks-api-server/internal/server/v1/handler/get"
 	"github.com/google/uuid"
 )
 
