@@ -2,26 +2,17 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 
-	"github.com/MrNeocore/tasks-api-server/internal/server/v1/handler"
+	"github.com/MrNeocore/tasks-api-server/internal/handler"
+	"github.com/gin-gonic/gin"
 )
 
 func Run(host string, port int) {
-	http.HandleFunc("/tasks", handler.Tasks)
-	http.HandleFunc("/tasks/", handler.Tasks)
+	r := gin.Default()
+	r.GET("/tasks/:id", handler.GetTask)
+	r.GET("/tasks", handler.GetTasks)
+	r.POST("/tasks", handler.PostTask)
 
 	listenOn := fmt.Sprintf("%v:%v", host, port)
-	http.ListenAndServe(listenOn, nil)
-
+	r.Run(listenOn)
 }
-
-// func main() {
-// 	r := gin.Default()
-// 	r.GET("/ping", func(c *gin.Context) {
-// 		c.JSON(http.StatusOK, gin.H{
-// 			"message": "pong",
-// 		})
-// 	})
-// 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
-// }

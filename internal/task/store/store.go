@@ -1,25 +1,16 @@
-package create
+package store
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/MrNeocore/tasks-api-server/internal/storage"
 	t "github.com/MrNeocore/tasks-api-server/task"
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
-func CreateTask(w http.ResponseWriter, req *http.Request) {
-	task, taskCreationError := newTaskFromRequest(req)
-
-	if taskCreationError != nil {
-		http.Error(w, taskCreationError.Error(), http.StatusBadRequest)
-		return
-	}
-
-	fmt.Printf("Adding task %v.\n", task)
+func StoreTask(ctx context.Context, task t.Task) error {
+	fmt.Printf("Storing task %v.\n", task)
 
 	sqlStatement := `INSERT INTO tasks (id, 
 									   creationTime, 
@@ -39,7 +30,7 @@ func CreateTask(w http.ResponseWriter, req *http.Request) {
 					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
 	`
 	_, insertErr := storage.DB.ExecContext(
-		req.Context(),
+		ctx,
 		sqlStatement,
 		task.ID,
 		task.CreationTime,
@@ -60,25 +51,10 @@ func CreateTask(w http.ResponseWriter, req *http.Request) {
 	if insertErr != nil {
 		errorMessage := "Failed to store the task !"
 		fmt.Println(errorMessage, insertErr.Error())
-		http.Error(w, errorMessage, http.StatusInternalServerError)
-		return
+		return insertErr
 	}
 
-	successMessage := fmt.Sprintf("Task %v added\n", task.ID)
+	fmt.Printf("Task %v stored !\n", task.ID)
 
-	fmt.Print(successMessage)
-	fmt.Fprint(w, successMessage)
-}
-
-func newTaskFromRequest(req *http.Request) (*t.Task, error) {
-	taskId := uuid.New()
-
-	task := t.NewEmptyTask(taskId)
-	decodeErr := json.NewDecoder(req.Body).Decode(task)
-
-	if decodeErr != nil {
-		return nil, decodeErr
-	}
-
-	return task, nil
+	return nil
 }
