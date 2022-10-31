@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"reflect"
+	"strings"
 
 	"github.com/Masterminds/semver"
 	"github.com/MrNeocore/tasks-api-server/internal/util"
+	"github.com/MrNeocore/tasks-api-server/task"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -93,24 +96,15 @@ func taskTableExists(db *sql.DB) bool {
 func createTable(db *sql.DB) {
 	fmt.Println("Create `tasks` table.")
 
-	taskTableInsertStmt := `
-		CREATE TABLE IF NOT EXISTS tasks (
-			id TEXT PRIMARY KEY,
-			creationTime TIMESTAMP,
-			shortTitle VARCHAR(32),
-			title VARCHAR(256),
-			description TEXT,
-			tags TEXT[],
-			category VARCHAR(64),
-			priority SMALLINT,
-			involvesOther BOOL,
-			timeEstimate INTERVAL,
-			dueDate TIMESTAMP,
-			hardDeadline BOOL,
-			reminder INTERVAL,
-			repeats INTERVAL
-		);
-	`
+	columns := getTaskColumnNameAndTypes()
+	createStmts := make([]string, len(columns))
+
+	for i, column := range columns {
+		alterStmt := fmt.Sprintf("%v %v", column.n, column.t)
+		createStmts[i] = alterStmt
+	}
+
+	taskTableInsertStmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS tasks (%v);", strings.Join(createStmts, ","))
 
 	_, err := db.Exec(taskTableInsertStmt)
 	util.PanicError(err)
@@ -121,26 +115,39 @@ func createTable(db *sql.DB) {
 func applyMigrations(db *sql.DB) {
 	fmt.Println("Applying new schema to table `tasks`.")
 
-	taskTableAlterStmt := `
-		ALTER TABLE tasks 
-		ADD COLUMN IF NOT EXISTS id TEXT PRIMARY KEY,
-		ADD COLUMN IF NOT EXISTS creationTime TIMESTAMP,
-		ADD COLUMN IF NOT EXISTS shortTitle VARCHAR(32),
-		ADD COLUMN IF NOT EXISTS title VARCHAR(256),
-		ADD COLUMN IF NOT EXISTS description TEXT,
-		ADD COLUMN IF NOT EXISTS tags TEXT[],
-		ADD COLUMN IF NOT EXISTS category VARCHAR(64),
-		ADD COLUMN IF NOT EXISTS priority SMALLINT,
-		ADD COLUMN IF NOT EXISTS involvesOther BOOL,
-		ADD COLUMN IF NOT EXISTS timeEstimate INTERVAL,
-		ADD COLUMN IF NOT EXISTS dueDate TIMESTAMP,
-		ADD COLUMN IF NOT EXISTS hardDeadline BOOL,
-		ADD COLUMN IF NOT EXISTS reminder INTERVAL,
-		ADD COLUMN IF NOT EXISTS repeats INTERVAL
-	`
+	columns := getTaskColumnNameAndTypes()
+	alterStmts := make([]string, len(columns))
+
+	for i, column := range columns {
+		alterStmt := fmt.Sprintf("ADD COLUMN IF NOT EXISTS %v %v", column.n, column.t)
+		alterStmts[i] = alterStmt
+	}
+
+	taskTableAlterStmt := fmt.Sprintf("ALTER TABLE tasks %v", strings.Join(alterStmts, ","))
 
 	_, err := db.Exec(taskTableAlterStmt)
 	util.PanicError(err)
 
 	fmt.Println("New schema applied to table `tasks`.")
+}
+
+type PgColumn struct {
+	n string
+	t string
+}
+
+// Move to task ?
+func getTaskColumnNameAndTypes() []PgColumn {
+	taskType := reflect.TypeOf(&task.Task{}).Elem()
+
+	columns := make([]PgColumn, taskType.NumField())
+
+	for i := 0; i < len(columns); i++ {
+		f := taskType.Field(i)
+		fieldName := string(f.Tag.Get("json"))
+		fieldType := string(f.Tag.Get("pgtype"))
+		columns[i] = PgColumn{fieldName, fieldType}
+	}
+
+	return columns
 }
