@@ -19,12 +19,12 @@ var NAME = util.GetOrElse(os.LookupEnv, "DB_NAME", "api")
 
 var DB *sql.DB
 
-var minVersionStr = ">=15"
+var minVersionStr = ">=12"
 var minVersion, _ = semver.NewConstraint(minVersionStr)
 
 func init() {
 	DB = connectDb()
-	checkVersionAtLeast(*minVersion, DB)
+	checkVersionAtLeast(DB, *minVersion)
 	applyDbMigrations(DB)
 }
 
@@ -43,7 +43,7 @@ func connectDb() *sql.DB {
 	return _db
 }
 
-func checkVersionAtLeast(minVersion semver.Constraints, db *sql.DB) {
+func checkVersionAtLeast(db *sql.DB, minVersion semver.Constraints) {
 	var currentVersion string
 	err := db.QueryRow("SELECT split_part(version(), ' ', 2)").Scan(&currentVersion)
 	if err != nil {
@@ -51,7 +51,7 @@ func checkVersionAtLeast(minVersion semver.Constraints, db *sql.DB) {
 	}
 
 	if !minVersion.Check(semver.MustParse(currentVersion)) {
-		err = fmt.Errorf("postgres version is too old: %v. Requires: %v.\n", currentVersion, minVersionStr)
+		err = fmt.Errorf("postgres version is too old: %v. Requires: %v", currentVersion, minVersionStr)
 		util.PanicError(err)
 	}
 }
